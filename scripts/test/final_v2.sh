@@ -84,20 +84,22 @@ $(echo "$TOP_MEM" | tr '|' '\n')" 30 90 6 \
 
 # Function to kill a process
 kill_process() {
-    PID=$(whiptail --inputbox "Enter PID to kill:" 8 78 3>&1 1>&2 2>&3)
-    exitstatus=$?
-    if [ $exitstatus -ne 0 ] || [ -z "$PID" ]; then
-        whiptail --msgbox "Operation cancelled or no PID entered!" 8 40
-        return
+    PROCESS_LIST=$(ps -eo pid,user,%cpu,%mem,comm --sort=-%cpu | awk '{printf "%-8s %-10s %-5s %-5s %s\n", $1, $2, $3, $4, $5}' | tr '\n' '|')
+
+    SEARCH_TERM=$(whiptail --inputbox "Enter process name to search (leave empty for all):" 8 60 3>&1 1>&2 2>&3)
+    if [ -n "$SEARCH_TERM" ]; then
+        FILTERED_LIST=$(ps -eo pid,user,%cpu,%mem,comm --sort=-%cpu | grep "$SEARCH_TERM" | awk '{printf "%-8s %-10s %-5s %-5s %s\n", $1, $2, $3, $4, $5}' | tr '\n' '|')
+        [ -z "$FILTERED_LIST" ] && FILTERED_LIST="No matching processes found|"
+    else
+        FILTERED_LIST="$PROCESS_LIST"
     fi
 
-    if ps -p "$PID" > /dev/null; then
-        kill -9 "$PID"
-        whiptail --msgbox "✅ Process $PID killed!" 8 40
-        send_telegram_alert "Process $PID was killed by the system monitor"
-    else
-        whiptail --msgbox "❌ Process $PID not found!" 8 40
-    fi
+    PID=$(whiptail --title "Select Process to Kill" --menu "Select a process to kill:" 20 80 10 $(echo "$FILTERED_LIST" | tr '|' ' ') 3>&1 1>&2 2>&3)
+
+    [ -z "$PID" ] && return
+    kill -9 "$PID"
+    send_telegram_alert "Process $PID was killed."
+    whiptail --msgbox "✅ Process $PID killed!" 8 40
 }
 
 # Function to monitor network bandwidth
